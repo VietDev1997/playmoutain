@@ -1,0 +1,103 @@
+---
+- name: Add user nginx, apache, vagrant to group
+  user:
+    name: "{{ item }}"
+    groups: "{{ app_group }}"
+    append: yes
+  with_items:
+    - "{{ app_nginx_user }}"
+    - "{{ app_php_fpm_user }}"
+    - "{{ app_vagrant_user }}"
+
+- block:
+  - name: Check if .env is exist in /vagrant
+    stat:
+      path: "{{ app_root }}/.env"
+    register: stat_env
+
+  - name: Create new laravel project
+    command: "{{ php_composer_install }} create-project laravel/laravel {{ app_root }}/tmp --prefer-dist"
+    when: stat_env.stat.exists == False
+
+  - name: Backup /vagrant folder and overwrite existing backup
+    command: "cp -Tr {{ app_root }} {{ app_root }}.bak"
+    when: stat_env.stat.exists == False
+
+  - name: Move the source code of new laravel project from /vagrant/tmp to /vagrant
+    command: "cp -r {{ app_root }}/tmp/. {{ app_root }}"
+    ignore_errors: true
+    when: stat_env.stat.exists == False
+
+  - name: Delete /vagrant/tmp
+    file:
+      path: "{{ app_root }}/tmp"
+      state: absent
+    when: stat_env.stat.exists == False
+  when: php_composer_create_project
+
+- name: Change .env file
+  template:
+    src: env.conf.j2
+    dest: "{{ app_root }}/.env"
+    owner: "{{ app_vagrant_user }}"
+    group: "{{ app_group }}"
+    mode: 0644
+    backup: yes
+
+- name: Run composer install
+  command: "{{ php_composer_install }} install"
+  args:
+    chdir: "{{ app_root }}"
+
+- name: Run composer update
+  command: "{{ php_composer_install }} update"
+  args:
+    chdir: "{{ app_root }}"
+  when: php_composer_auto_update
+
+- name: Apply config after restarting
+  service: name="{{ item }}" state=restarted
+  with_items:
+    - "{{ nginx_daemon }}"
+    - "{{ php_fpm_daemon }}"
+
+- name: Laravel clear config cache
+  command: php artisan config:cache
+  args:
+    chdir: "{{ app_root }}"
+
+- name: Laravel generate key
+  command: php artisan key:generate
+  args:
+    chdir: "{{ app_root }}"
+  register: l_output
+
+- debug: msg="{{ l_output.stdout }}"
+#- debug: msg="{{ l_output.stderr }}"
+
+- name: Laravel clear config cache
+  command: php artisan config:cache
+  args:
+    chdir: "{{ app_root }}"
+
+- name: Laravel create tables
+  command: php artisan migrate
+  args:
+    chdir: "{{ app_root }}"
+  ignore_errors: true
+
+- name: Laravel clear config cache
+  command: php artisan config:cache
+  args:
+    chdir: "{{ app_root }}"
+
+- name: Laravel seeding db
+  command: php artisan migrate --seed
+  args:
+    chdir: "{{ app_root }}"
+  ignore_errors: true
+
+- name: Laravel clear config cache
+  command: php artisan config:cache
+  args:
+    chdir: "{{ app_root }}"

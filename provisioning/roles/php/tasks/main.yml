@@ -1,0 +1,137 @@
+---
+- name: Set php_cli_version 7.2
+  set_fact:
+    php_cli_version: "7.2"
+  when: php_version == "php72"
+
+- name: Set php_cli_version 7.1
+  set_fact:
+    php_cli_version: "7.1"
+  when: php_version == "php71"
+
+- name: Set php_cli_version 7.0
+  set_fact:
+    php_cli_version: "7.0"
+  when: php_version == "php70"
+
+- name: Set php_cli_version 5.6
+  set_fact:
+    php_cli_version: "5.6"
+  when: php_version == "php56"
+
+- name: Set php_cli_version 5.4
+  set_fact:
+    php_cli_version: "5.4"
+  when: php_version == "php54"
+
+- name: Get PHP version.
+  command: 'php --version'
+  register: php_cli_installed_version
+  changed_when: false
+  ignore_errors: yes
+
+- debug: msg="{{ php_cli_version }}"
+- debug: msg="{{ php_cli_installed_version }}"
+
+- name: Remove php when version changed
+  yum:
+    name: "php-common"
+    state: absent
+  when: php_cli_installed_version.rc == 0 and php_cli_installed_version.stdout is defined and php_cli_version not in php_cli_installed_version.stdout
+
+- name: Disable all remi php
+  command: yum-config-manager --disable "remi-php*"
+
+- name: Enable remi php
+  command: yum-config-manager --enable "remi-{{ php_version }}"
+
+- name: Install php
+  yum:
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ php_packages }}"
+
+- name: Stat php_fpm_pool_conf_path
+  stat:
+    path: "{{ php_fpm_pool_conf_path }}"
+  register: php_fpm_pool_conf_path_dir_stat
+
+- name: Ensure the default pool directory exists.
+  file:
+    path: "{{ php_fpm_pool_conf_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  when: php_fpm_pool_conf_path_dir_stat.stat.islnk is not defined
+
+- name: Ensure the default pool exists.
+  template:
+    src: www.conf.j2
+    dest: "{{ php_fpm_pool_conf_path }}"
+    owner: root
+    group: root
+    mode: 0644
+    force: no
+  when: php_enable_php_fpm
+
+- name: Configure php-fpm pool (if enabled).
+  lineinfile:
+    dest: "{{ php_fpm_pool_conf_path }}"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+  with_items:
+    - regexp: "^user.?=.+$"
+      line: "user = {{ php_fpm_pool_user }}"
+    - regexp: "^group.?=.+$"
+      line: "group = {{ php_fpm_pool_group }}"
+    - regexp: "^listen.?=.+$"
+      line: "listen = {{ php_fpm_listen }}"
+    - regexp: '^listen\.allowed_clients.?=.+$'
+      line: "listen.allowed_clients = {{ php_fpm_listen_allowed_clients }}"
+    - regexp: '^listen\.owner.?=.+$'
+      line: "listen.owner = {{ php_fpm_listen_owner }}"
+    - regexp: '^listen\.group.?=.+$'
+      line: "listen.group = {{ php_fpm_listen_group }}"
+    - regexp: '^listen\.mode.?=.+$'
+      line: "listen.mode = {{ php_fpm_listen_mode }}"
+    - regexp: '^pm\.max_children.?=.+$'
+      line: "pm.max_children = {{ php_fpm_pm_max_children }}"
+    - regexp: '^pm\.start_servers.?=.+$'
+      line: "pm.start_servers = {{ php_fpm_pm_start_servers }}"
+    - regexp: '^pm\.min_spare_servers.?=.+$'
+      line: "pm.min_spare_servers = {{ php_fpm_pm_min_spare_servers }}"
+    - regexp: '^pm\.max_spare_servers.?=.+$'
+      line: "pm.max_spare_servers = {{ php_fpm_pm_max_spare_servers }}"
+  when: php_enable_php_fpm
+  notify: restart php-fpm
+
+- name: check to see if composer is already installed
+  command: "{{ php_composer_install }} --version"
+  ignore_errors: true
+  register: composer_is_installed
+  changed_when: false
+
+- block:
+  - name: Download composer
+    get_url:
+      url: https://getcomposer.org/installer
+      dest: /tmp/composer-setup.php
+
+  - name: Install composer
+    shell: "cat /tmp/composer-setup.php | php -- --install-dir={{ php_composer_path }}"
+    args:
+      creates: "{{ php_composer_install }}"
+
+  - name: Rename composer.phar to composer
+    shell: "mv {{ php_composer_path }}/composer.phar {{ php_composer_install }}"
+    args:
+      creates: "{{ php_composer_install }}"
+
+  - name: Make composer executable
+    file:
+      path: "{{ php_composer_install }}"
+      mode: a+x
+      state: file
+  when: composer_is_installed.rc != 0

@@ -1,0 +1,30 @@
+mysql_root_home: /root
+mysql_daemon: mysqld
+mysql_enabled_on_startup: yes
+mysql_packages:
+  - mysql-community-server
+  - mysql-community-devel
+
+mysql_root_username: root
+# CUSTOMIZE HERE
+mysql_root_password: "123"
+# Databases.
+mysql_databases:
+#   - name: example
+#     collation: utf8_general_ci
+#     encoding: utf8
+# CUSTOMIZE HERE
+  - name: playmountainphp
+
+
+# Users.
+mysql_users:
+#   - name: example
+#     host: 127.0.0.1
+#     password: secret
+#     priv: *.*:USAGE
+# CUSTOMIZE HERE
+  - name: playmountain
+    host: "%"
+    password: 123456
+    priv: "playmountainphp.*:ALL"

@@ -1,0 +1,55 @@
+nginx_daemon: "nginx"
+nginx_user: "nginx"
+nginx_default_vhost_path: "/etc/nginx/conf.d/default.conf"
+nginx_conf_path: "/etc/nginx/conf.d"
+nginx_conf_file_path: "/etc/nginx/nginx.conf"
+nginx_mime_file_path: "/etc/nginx/mime.types"
+nginx_pidfile: "/var/run/nginx.pid"
+nginx_vhost_path: "/etc/nginx/conf.d"
+
+nginx_error_log: "/var/log/nginx/error.log warn"
+nginx_access_log: "/var/log/nginx/access.log main buffer=16k flush=2m"
+nginx_yum_repo_enabled: true
+nginx_conf_template: "nginx.conf.j2"
+nginx_vhost_template: "vhost.conf.j2"
+nginx_remove_default_vhost: true
+nginx_worker_processes: "{{ ansible_processor_vcpus | default(ansible_processor_count) }}"
+nginx_worker_connections: "1024"
+nginx_multi_accept: "off"
+nginx_sendfile: "on"
+nginx_tcp_nopush: "on"
+nginx_tcp_nodelay: "on"
+nginx_keepalive_timeout: "65"
+nginx_keepalive_requests: "100"
+nginx_server_tokens: "on"
+nginx_extra_conf_options: ""
+nginx_extra_http_options: ""
+nginx_client_max_body_size: "64m"
+nginx_server_names_hash_bucket_size: "64"
+nginx_log_format: |
+  '$remote_addr - $remote_user [$time_local] "$request" '
+  '$status $body_bytes_sent "$http_referer" '
+  '"$http_user_agent" "$http_x_forwarded_for"'
+
+nginx_vhosts:
+  - listen: "80"
+    server_name: "mycms.com"
+    root: "{{ app_public_root }}"
+    index: "index.php index.html index.htm"
+    access_log: "/var/log/nginx/mycms.com.access.log"
+    error_log: "/var/log/nginx/mycms.com.error.log"
+    state: "present"
+    template: "{{ nginx_vhost_template }}"
+    filename: "mycms.com.conf"
+    extra_parameters: |
+      location / {
+          try_files $uri $uri/ /index.php?$query_string;
+      }
+
+      location ~ \.php$ {
+          fastcgi_split_path_info ^(.+\.php)(/.+)$;
+          fastcgi_pass unix:/var/run/php-fpm.sock;
+          fastcgi_index index.php;
+          fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+          include /etc/nginx/fastcgi_params;
+      }

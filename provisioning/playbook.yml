@@ -1,0 +1,20 @@
+---
+- name: Install environment
+  hosts: all
+  roles:
+    - base
+    - mysql
+    - php
+    - nginx
+    - app
+
+  tasks:
+  - name: start and enable service
+    service:
+      name: "{{ item }}"
+      enabled: yes
+      state: restarted
+    with_items:
+      - "{{ mysql_daemon }}"
+      - "{{ php_fpm_daemon }}"
+      - "{{ nginx_daemon }}"

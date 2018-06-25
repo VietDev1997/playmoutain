@@ -1,0 +1,7 @@
+app_vagrant_group: vagrant
+app_group: "{{ app_vagrant_group }}"
+app_nginx_user: nginx
+app_php_fpm_user: apache
+app_vagrant_user: vagrant
+app_root: /vagrant
+app_public_root: "{{ app_root }}/public"

@@ -1,0 +1,7 @@
+#page {
+    width: inherit;
+    margin: 0px auto;
+}
+#page ul li {
+    float: left;
+}
